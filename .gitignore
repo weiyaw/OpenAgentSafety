@@ -1,7 +1,9 @@
 # Evaluation-related
 evaluation/screenshots*/
+evaluation/*/screenshots*/
 evaluation/outputs*/
 evaluation/config.toml
+evaluation/*/*.json
 *download*
 *owncloud_data*
 *owncloud_apps*
