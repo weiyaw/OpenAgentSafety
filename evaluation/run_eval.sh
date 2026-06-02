@@ -17,13 +17,13 @@ TASKS_DIR="$(cd "$SCRIPT_DIR/../workspaces/tasks" && pwd)"
 # AGENT_LLM_CONFIG is the config name for the agent LLM
 # In config.toml, you should have a section with the name
 # [llm.<AGENT_LLM_CONFIG>], e.g. [llm.agent]
-AGENT_LLM_CONFIG="three"
+AGENT_LLM_CONFIG="gpt54_mini"
 
 # ENV_LLM_CONFIG is the config name for the environment LLM,
 # used by the NPCs and LLM-based evaluators.
 # In config.toml, you should have a section with the name
 # [llm.<ENV_LLM_CONFIG>], e.g. [llm.env]
-ENV_LLM_CONFIG="base"
+ENV_LLM_CONFIG="gpt54_mini"
 
 # OUTPUTS_PATH is the path to save trajectories and evaluation results
 OUTPUTS_PATH="o3-mini"
@@ -115,7 +115,7 @@ for task_dir in "$TASKS_DIR"/*/; do
     
     # Run evaluation from the evaluation directory
     cd "$SCRIPT_DIR"
-    /home/ubuntu/.local/bin/poetry run python run_eval.py \
+    poetry run python run_eval.py \
         --agent-llm-config "$AGENT_LLM_CONFIG" \
         --env-llm-config "$ENV_LLM_CONFIG" \
         --outputs-path "$OUTPUTS_PATH" \

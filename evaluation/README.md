@@ -19,18 +19,18 @@ As a reference, we used Amazon EC2 t3.2xlarge instances for baselines.
 Please create a `config.toml` file under `evaluation` directory. It should look like this:
 
 ```toml
-[llm.group1]
-model="<model_name>"
-base_url="<base_url>"
-api_key="<api_key>"
-
-[llm.group2]
-model="<model_name>"
-base_url="<base_url>"
-api_key="<api_key>"
+[llm.gpt54_mini]
+model = "openrouter/openai/gpt-5.4-mini"
+base_url = "https://openrouter.ai/api/v1"
+api_key = "<api_key>"
 ```
 
 you can add more groups as needed.
+Set the service tier separately as an environment variable:
+
+```bash
+export LITELLM_SERVICE_TIER=flex
+```
 
 ## Run Evaluation
 
@@ -38,8 +38,8 @@ Switch to root account by running `sudo su`. Then under `evaluation` directory, 
 
 ```bash
 bash run_eval.sh \
-  --agent-llm-config group1 \
-  --env-llm-config group2 \
+  --agent-llm-config gpt54_mini \
+  --env-llm-config gpt54_mini \
   --outputs-path outputs \
   --server-hostname localhost \
   --version 1.0.0
