@@ -21,7 +21,7 @@ ENV PYTHONPATH="/workspace:$PYTHONPATH"
 # api-server
 RUN mkdir -p /workspace
 WORKDIR /workspace
-COPY api-server.py /workspace/
+COPY api_server.py /workspace/
 COPY utils.py /workspace/
 COPY docker-compose.yml /workspace/
 COPY API_MAKEFILE /workspace/Makefile
@@ -59,4 +59,4 @@ RUN . /opt/venv/bin/activate && \
     requests==2.32.3 \
     redis-om==0.3.2
 
-ENTRYPOINT ["python", "api-server.py"]
+ENTRYPOINT ["python", "api_server.py"]

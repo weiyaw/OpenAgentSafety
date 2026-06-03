@@ -27,7 +27,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Make publish script executable
-        run: chmod +x .github/publish_task_images.sh
+        run: chmod +x .github/publish-task-images.sh
 
       - name: Build and publish images
-        run: .github/publish_task_images.sh ${{ github.event.inputs.version }}
+        run: .github/publish-task-images.sh ${{ github.event.inputs.version }}

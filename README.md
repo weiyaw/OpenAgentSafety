@@ -52,7 +52,7 @@ Each task is packaged as a Docker image with:
 ```bash
 sudo su
 cd evaluation
-bash run_eval.sh \
+bash run-eval.sh \
   --agent-llm-config <group1> \
   --env-llm-config <group2> \
   --outputs-path <outputs> \

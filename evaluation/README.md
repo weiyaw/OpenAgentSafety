@@ -37,7 +37,7 @@ export LITELLM_SERVICE_TIER=flex
 Switch to root account by running `sudo su`. Then under `evaluation` directory, run the following command:
 
 ```bash
-bash run_eval.sh \
+bash run-eval.sh \
   --agent-llm-config gpt54_mini \
   --env-llm-config gpt54_mini \
   --outputs-path outputs \
