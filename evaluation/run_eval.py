@@ -389,7 +389,7 @@ def run_solver(runtime: Runtime, task_name: str, config: AppConfig, dependencies
             fake_user_response_fn= codeact_user_response,
         )
     )
-    logger.info(state)
+    # logger.info(state)
 
     if save_screenshots:
         screenshots_dir = os.path.join(screenshots_dir, task_name)
