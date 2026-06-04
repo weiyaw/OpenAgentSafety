@@ -8,13 +8,14 @@ import yaml
 import tempfile
 import base64
 import shlex
+import tomllib
+import copy
 
 from openhands.controller.state.state import State
 from openhands.core.config import (
     AppConfig,
     SandboxConfig,
     LLMConfig,
-    get_llm_config_arg,
     get_parser,
 )
 from openhands.core.config.agent_config import AgentConfig
@@ -36,15 +37,82 @@ def _shell_env(**values) -> str:
         if value is not None
     )
 
+
+def get_llm_params(toml_file: str, llm_config_name: str | None) -> dict | None:
+    if not llm_config_name:
+        return None
+
+    with open(toml_file, 'rb') as f:
+        config = tomllib.load(f)
+
+    params = (
+        config.get('llm', {})
+        .get(llm_config_name, {})
+        .get('params')
+    )
+    if params:
+        return params
+    return None
+
+
+def get_llm_config_arg(llm_config_arg: str | None, toml_file: str) -> LLMConfig | None:
+    if not llm_config_arg:
+        return None
+
+    llm_config_arg = llm_config_arg.strip('[]')
+    if llm_config_arg.startswith('llm.'):
+        llm_config_arg = llm_config_arg[4:]
+
+    with open(toml_file, 'rb') as f:
+        config = tomllib.load(f)
+
+    llm_config = config.get('llm', {}).get(llm_config_arg)
+    if not llm_config:
+        return None
+
+    # `params` is a repo-local escape hatch for LiteLLM/OpenRouter request
+    # options. OpenHands' LLMConfig rejects unknown fields, so load those
+    # separately with get_llm_params().
+    llm_config = dict(llm_config)
+    llm_config.pop('params', None)
+    return LLMConfig(**llm_config)
+
+
+def merge_llm_params(completion_kwargs: dict, params: dict | None) -> None:
+    if not params:
+        return
+
+    for key, value in params.items():
+        if (
+            key in completion_kwargs
+            and isinstance(completion_kwargs[key], dict)
+            and isinstance(value, dict)
+        ):
+            merge_llm_params(completion_kwargs[key], value)
+        else:
+            completion_kwargs.setdefault(key, copy.deepcopy(value))
+
+
+def get_service_tier(params: dict | None) -> str | None:
+    if not params:
+        return None
+    service_tier = params.get('service_tier')
+    if service_tier is None:
+        return None
+    return str(service_tier)
+
+
 class FakeUser:
     def __init__(
         self,
         runtime: Runtime,
         llm_config: LLMConfig,
+        llm_params: dict | None = None,
     ):
         self.runtime = runtime
         self.turns = 0
         self.llm_config = llm_config
+        self.llm_params = llm_params
         self.client = openai.OpenAI(
             api_key=llm_config.api_key.get_secret_value(),
             base_url=llm_config.base_url,
@@ -97,7 +165,7 @@ class FakeUser:
             'model': model,
             'messages': self.chat_history,
         }
-        completion_kwargs['service_tier'] = llm_service_tier
+        merge_llm_params(completion_kwargs, self.llm_params)
         response = self.client.chat.completions.create(**completion_kwargs)
 
         reply = response.choices[0].message.content
@@ -111,7 +179,7 @@ def codeact_user_response(state: State) -> str:
     # Initialize FakeUser if it doesn't exist yet
     global fake_user
     if 'fake_user' not in globals():
-        fake_user = FakeUser(runtime, fake_user_llm_config)
+        fake_user = FakeUser(runtime, fake_user_llm_config, fake_user_llm_params)
     
     # Get the last agent message
     last_agent_msg = None
@@ -202,6 +270,7 @@ def init_task_env(
     runtime: Runtime,
     hostname: str,
     env_llm_config: LLMConfig,
+    env_llm_params: dict | None,
     task_path: str,
 ):
     # copy ./utils to /utils
@@ -234,7 +303,7 @@ def init_task_env(
         LITELLM_API_KEY=env_llm_config.api_key.get_secret_value(),
         LITELLM_BASE_URL=env_llm_config.base_url,
         LITELLM_MODEL=env_llm_config.model,
-        LITELLM_SERVICE_TIER=llm_service_tier,
+        LITELLM_SERVICE_TIER=get_service_tier(env_llm_params),
     )
     command = f"{env_args} bash /utils/init.sh"
     action = CmdRunAction(command=command)
@@ -284,6 +353,7 @@ def run_solver(runtime: Runtime, task_name: str, config: AppConfig, dependencies
 def run_evaluator(
     runtime: Runtime,
     env_llm_config: LLMConfig,
+    env_llm_params: dict | None,
     trajectory_path: str,
     result_path: str,
 ):
@@ -294,7 +364,7 @@ def run_evaluator(
         LITELLM_API_KEY=env_llm_config.api_key.get_secret_value(),
         LITELLM_BASE_URL=env_llm_config.base_url,
         LITELLM_MODEL=env_llm_config.model,
-        LITELLM_SERVICE_TIER=llm_service_tier,
+        LITELLM_SERVICE_TIER=get_service_tier(env_llm_params),
         DECRYPTION_KEY='theagentcompany is all you need',
     )
     command = (
@@ -368,6 +438,8 @@ if __name__ == '__main__':
     config_toml = os.path.join(os.path.dirname(__file__), 'config.toml')
     agent_llm_config = get_llm_config_arg(args.agent_llm_config, toml_file=config_toml)
     env_llm_config = get_llm_config_arg(args.env_llm_config, toml_file=config_toml)
+    agent_llm_params = get_llm_params(config_toml, args.agent_llm_config)
+    env_llm_params = get_llm_params(config_toml, args.env_llm_config)
 
     if agent_llm_config is None:
         raise ValueError(f'Could not find LLM config for agent: --agent-llm-config {args.agent_llm_config}')
@@ -381,26 +453,23 @@ if __name__ == '__main__':
     if env_llm_config.api_key is None:
         raise ValueError(f'LLM API key is not set for evaluation environment')
 
-    llm_service_tier = os.environ.get('LITELLM_SERVICE_TIER')
-    if not llm_service_tier:
-        raise ValueError('LITELLM_SERVICE_TIER is not set')
-
     import openhands.llm.llm as llm_module
 
     original_completion = llm_module.litellm_completion
 
-    def completion_with_service_tier(*args, **kwargs):
-        kwargs.setdefault('service_tier', llm_service_tier)
+    def completion_with_llm_params(*args, **kwargs):
+        merge_llm_params(kwargs, agent_llm_params)
         return original_completion(*args, **kwargs)
 
-    llm_module.litellm_completion = completion_with_service_tier
+    llm_module.litellm_completion = completion_with_llm_params
 
     fake_user_llm_config = env_llm_config
+    fake_user_llm_params = env_llm_params
 
     config: AppConfig = get_config(args.task_path, task_short_name, temp_dir, agent_llm_config)
     runtime: Runtime = create_runtime(config)
     call_async_from_sync(runtime.connect)
-    init_task_env(runtime, args.server_hostname, env_llm_config, args.task_path)
+    init_task_env(runtime, args.server_hostname, env_llm_config, env_llm_params, args.task_path)
 
     dependencies = load_dependencies(runtime)
     logger.info(f"Service dependencies: {dependencies}")
@@ -412,7 +481,7 @@ if __name__ == '__main__':
 
         # before giving up, let's try to init and login again
 
-        init_task_env(runtime, args.server_hostname, env_llm_config, args.task_path)
+        init_task_env(runtime, args.server_hostname, env_llm_config, env_llm_params, args.task_path)
         pre_login(runtime, dependencies, save_screenshots=True, screenshots_dir=os.path.join(os.path.abspath(args.outputs_path), "screenshots"))
 
     state = run_solver(runtime, task_short_name, config, dependencies,
@@ -423,7 +492,7 @@ if __name__ == '__main__':
     trajectory_path = f'/outputs/traj_{task_short_name}.json'
     result_path = f'/outputs/eval_{task_short_name}.json'
 
-    run_evaluator(runtime, env_llm_config, trajectory_path, result_path)
+    run_evaluator(runtime, env_llm_config, env_llm_params, trajectory_path, result_path)
     runtime.close()
     # finally, move trajectory file and evaluation result from mount path on host (temp dir) to outputs path
     shutil.move(os.path.join(temp_dir, f'traj_{task_short_name}.json'), os.path.join(os.path.abspath(args.outputs_path), f'traj_{task_short_name}.json'))

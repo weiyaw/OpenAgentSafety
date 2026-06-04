@@ -6,11 +6,9 @@ TASKS_DIR="$SCRIPT_DIR/../workspaces/tasks"
 
 cd "$SCRIPT_DIR"
 
-export LITELLM_SERVICE_TIER="flex"
-
-AGENT_LLM_CONFIG="gpt54_mini"
-ENV_LLM_CONFIG="gpt54_mini"
-OUTPUTS_PATH="gpt54-mini"
+AGENT_LLM_CONFIG="deepseekv4_flash"
+ENV_LLM_CONFIG="deepseekv4_flash"
+OUTPUTS_PATH="deepseekv4_flash"
 SERVER_HOSTNAME="localhost"
 TASK_TYPE="no_npc" # "no_npc", "with_npc", "all"
 
@@ -34,7 +32,7 @@ for task_dir in "$TASKS_DIR"/*/; do
         continue
     fi
 
-    poetry run python run_eval.py \
+    uv run python run_eval.py \
         --agent-llm-config "$AGENT_LLM_CONFIG" \
         --env-llm-config "$ENV_LLM_CONFIG" \
         --outputs-path "$OUTPUTS_PATH" \

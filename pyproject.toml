@@ -1,21 +1,21 @@
-[tool.poetry]
+[project]
 name = "TheAgentCompany"
 version = "1.0.0"
 description = "A benchmark for agents that could do professional jobs"
-authors = ["The Agent Company"]
+authors = [{ name = "The Agent Company" }]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/TheAgentCompany/TheAgentCompany"
-include = ["poetry.lock"]
-package-mode = false
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "setuptools>=78.1.0,<79.0.0",
+    "fitz>=0.0.1.dev2,<0.0.2",
+    "pyyaml",
+    "openhands-ai @ git+https://github.com/adityasoni9998/OpenHands.git@sotopia_chat_tool",
+    "daytona-api-client==0.15.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-setuptools = "^78.1.0"
-fitz = "^0.0.1.dev2"
+[project.urls]
+Repository = "https://github.com/TheAgentCompany/TheAgentCompany"
 
-[tool.poetry.group.evaluation.dependencies]
-# only needed if you want to run the benchmark with OpenHands
-pyyaml = "*"
-openhands-ai = { git = "https://github.com/adityasoni9998/OpenHands.git", branch = "sotopia_chat_tool" }
-
+[tool.uv]
+package = false

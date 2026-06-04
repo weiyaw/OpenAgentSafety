@@ -7,8 +7,8 @@ This directory contains the baseline for The Agent Company. The baseline is cond
 
 If you need to use OpenHands for evaluation, you also need:
 1. python 3.12 or above
-2. poetry
-3. install dependencies using `poetry install` under project root directory
+2. uv
+3. install dependencies using `uv sync` under project root directory
 4. docker buildx
 5. you can use `root` account
 

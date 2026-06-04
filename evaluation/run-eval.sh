@@ -115,7 +115,7 @@ for task_dir in "$TASKS_DIR"/*/; do
     
     # Run evaluation from the evaluation directory
     cd "$SCRIPT_DIR"
-    poetry run python run_eval.py \
+    uv run python run_eval.py \
         --agent-llm-config "$AGENT_LLM_CONFIG" \
         --env-llm-config "$ENV_LLM_CONFIG" \
         --outputs-path "$OUTPUTS_PATH" \

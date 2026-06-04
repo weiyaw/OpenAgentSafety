@@ -10,7 +10,7 @@ for task_dir in workspaces/tasks/*/; do
     docker pull $task_image_name
 
     echo "Building OpenHands runtime image..."
-    poetry run python evaluation/run_eval.py \
+    uv run python evaluation/run_eval.py \
         --task-image-name "$task_image_name" \
         --build-image-only True
 done
