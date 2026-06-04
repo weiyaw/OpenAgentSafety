@@ -10,6 +10,7 @@ import base64
 import shlex
 import tomllib
 import copy
+import re
 
 from openhands.controller.state.state import State
 from openhands.core.config import (
@@ -28,6 +29,53 @@ from openhands.utils.async_utils import call_async_from_sync
 from openhands.core.config.condenser_config import BrowserOutputCondenserConfig
 import openai
 from browsing import pre_login
+
+
+_ENV_VAR_RE = re.compile(r'\$\{([^}:]+)(?::-[^}]*)?\}')
+
+
+def load_dotenv_if_present(start_dir: str) -> None:
+    """Load simple KEY=VALUE lines from .env without overriding the shell."""
+    dotenv_path = os.path.join(start_dir, '.env')
+    if not os.path.exists(dotenv_path):
+        return
+
+    with open(dotenv_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+def expand_env_values(value):
+    if isinstance(value, str):
+        return os.path.expandvars(value)
+    if isinstance(value, dict):
+        return {key: expand_env_values(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [expand_env_values(item) for item in value]
+    return value
+
+
+def find_unresolved_env_vars(value) -> list[str]:
+    if isinstance(value, str):
+        return _ENV_VAR_RE.findall(value)
+    if isinstance(value, dict):
+        unresolved = []
+        for item in value.values():
+            unresolved.extend(find_unresolved_env_vars(item))
+        return unresolved
+    if isinstance(value, list):
+        unresolved = []
+        for item in value:
+            unresolved.extend(find_unresolved_env_vars(item))
+        return unresolved
+    return []
 
 
 def _shell_env(**values) -> str:
@@ -73,7 +121,13 @@ def get_llm_config_arg(llm_config_arg: str | None, toml_file: str) -> LLMConfig 
     # `params` is a repo-local escape hatch for LiteLLM/OpenRouter request
     # options. OpenHands' LLMConfig rejects unknown fields, so load those
     # separately with get_llm_params().
-    llm_config = dict(llm_config)
+    llm_config = expand_env_values(dict(llm_config))
+    unresolved_vars = sorted(set(find_unresolved_env_vars(llm_config)))
+    if unresolved_vars:
+        raise ValueError(
+            f'LLM config {llm_config_arg!r} references unset environment '
+            f'variable(s): {", ".join(unresolved_vars)}'
+        )
     llm_config.pop('params', None)
     return LLMConfig(**llm_config)
 
@@ -277,9 +331,14 @@ def init_task_env(
     utils_path = os.path.join(task_path, 'utils/')
     runtime.copy_to(host_src=utils_path, sandbox_dest='/utils/', recursive=True)
     
-    # copy ./workspace to /workspace
+    # copy ./workspace to /workspace when the task provides seed files
     workspace_path = os.path.join(task_path, 'workspace/')
-    runtime.copy_to(host_src=workspace_path, sandbox_dest='/workspace/', recursive=True)
+    if os.path.isdir(workspace_path):
+        runtime.copy_to(host_src=workspace_path, sandbox_dest='/workspace/', recursive=True)
+    else:
+        logger.warning(f"workspace directory not found at {workspace_path}, starting with an empty /workspace.")
+        obs = runtime.run_action(CmdRunAction(command="mkdir -p /workspace"))
+        assert obs.exit_code == 0
 
     # copy scenarios.json to /npc
     scenarios_path = os.path.join(task_path, 'scenarios.json')
@@ -414,6 +473,8 @@ if __name__ == '__main__':
         help='LLM config for evaluation environment (NPC & llm-based evaluator)',
     )
     args, _ = parser.parse_known_args()
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    load_dotenv_if_present(repo_root)
 
     if not args.task_path or not args.task_path.strip():
         raise ValueError(f'Task path is invalid!')
@@ -430,10 +491,15 @@ if __name__ == '__main__':
     # evaluator (in container), so we mount a temporary directory to pass it in
     # 2) evaluation result is written by evaluator (in container), but we need to persist
     # it on host machine, so we mount a temporary directory to pass it out
-    if os.getenv('TMPDIR') and os.path.exists(os.getenv('TMPDIR')):
-        temp_dir = os.path.abspath(os.getenv('TMPDIR'))
+    temp_parent = os.getenv('TMPDIR')
+    if temp_parent and os.path.isdir(temp_parent):
+        temp_dir = tempfile.mkdtemp(prefix='oas-eval-', dir=os.path.abspath(temp_parent))
     else:
-        temp_dir = tempfile.mkdtemp()
+        temp_dir = tempfile.mkdtemp(prefix='oas-eval-')
+    os.chmod(temp_dir, 0o777)
+
+    outputs_path = os.path.abspath(args.outputs_path)
+    os.makedirs(outputs_path, exist_ok=True)
 
     config_toml = os.path.join(os.path.dirname(__file__), 'config.toml')
     agent_llm_config = get_llm_config_arg(args.agent_llm_config, toml_file=config_toml)
@@ -475,18 +541,18 @@ if __name__ == '__main__':
     logger.info(f"Service dependencies: {dependencies}")
     
     try:
-        pre_login(runtime, dependencies, save_screenshots=True, screenshots_dir=os.path.join(os.path.abspath(args.outputs_path), "screenshots"))
+        pre_login(runtime, dependencies, save_screenshots=True, screenshots_dir=os.path.join(outputs_path, "screenshots"))
     except Exception as e:
         logger.error(f"Failed to pre-login: {e}")
 
         # before giving up, let's try to init and login again
 
         init_task_env(runtime, args.server_hostname, env_llm_config, env_llm_params, args.task_path)
-        pre_login(runtime, dependencies, save_screenshots=True, screenshots_dir=os.path.join(os.path.abspath(args.outputs_path), "screenshots"))
+        pre_login(runtime, dependencies, save_screenshots=True, screenshots_dir=os.path.join(outputs_path, "screenshots"))
 
     state = run_solver(runtime, task_short_name, config, dependencies,
-                       save_final_state=True, state_dir=os.path.abspath(args.outputs_path),
-                       save_screenshots=True, screenshots_dir=os.path.join(os.path.abspath(args.outputs_path), "screenshots"))
+                       save_final_state=True, state_dir=outputs_path,
+                       save_screenshots=True, screenshots_dir=os.path.join(outputs_path, "screenshots"))
     
     # this path is the absolute path in the runtime container
     trajectory_path = f'/outputs/traj_{task_short_name}.json'
@@ -495,5 +561,5 @@ if __name__ == '__main__':
     run_evaluator(runtime, env_llm_config, env_llm_params, trajectory_path, result_path)
     runtime.close()
     # finally, move trajectory file and evaluation result from mount path on host (temp dir) to outputs path
-    shutil.move(os.path.join(temp_dir, f'traj_{task_short_name}.json'), os.path.join(os.path.abspath(args.outputs_path), f'traj_{task_short_name}.json'))
-    shutil.move(os.path.join(temp_dir, f'eval_{task_short_name}.json'), os.path.join(os.path.abspath(args.outputs_path), f'eval_{task_short_name}.json'))
+    shutil.move(os.path.join(temp_dir, f'traj_{task_short_name}.json'), os.path.join(outputs_path, f'traj_{task_short_name}.json'))
+    shutil.move(os.path.join(temp_dir, f'eval_{task_short_name}.json'), os.path.join(outputs_path, f'eval_{task_short_name}.json'))

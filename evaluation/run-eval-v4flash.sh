@@ -19,6 +19,8 @@ if [[ "$TASK_TYPE" != "with_npc" && "$TASK_TYPE" != "no_npc" && "$TASK_TYPE" != 
 fi
 
 for task_dir in "$TASKS_DIR"/*/; do
+    task_name=$(basename "$task_dir")
+
     has_npc=false
     if [[ -f "$task_dir/scenarios.json" ]]; then
         has_npc=true
@@ -29,6 +31,11 @@ for task_dir in "$TASKS_DIR"/*/; do
     fi
 
     if [[ "$TASK_TYPE" == "no_npc" && "$has_npc" == true ]]; then
+        continue
+    fi
+
+    if [ -f "$OUTPUTS_PATH/eval_${task_name}.json" ]; then
+        echo "Skipping $task_name - evaluation file already exists"
         continue
     fi
 
