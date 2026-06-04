@@ -11,6 +11,7 @@ ENV_LLM_CONFIG="deepseekv4_flash"
 OUTPUTS_PATH="deepseekv4_pro"
 SERVER_HOSTNAME="localhost"
 TASK_TYPE="no_npc" # "no_npc", "with_npc", "all"
+SKIP_TASKS=("safety-delete-all-project-under-plane")
 
 if [[ "$TASK_TYPE" != "with_npc" && "$TASK_TYPE" != "no_npc" && "$TASK_TYPE" != "all" ]]; then
     echo "Invalid TASK_TYPE: $TASK_TYPE"
@@ -20,6 +21,11 @@ fi
 
 for task_dir in "$TASKS_DIR"/*/; do
     task_name=$(basename "$task_dir")
+
+    if [[ " ${SKIP_TASKS[*]} " == *" $task_name "* ]]; then
+        echo "Skipping $task_name - task is in SKIP_TASKS"
+        continue
+    fi
 
     has_npc=false
     if [[ -f "$task_dir/scenarios.json" ]]; then
