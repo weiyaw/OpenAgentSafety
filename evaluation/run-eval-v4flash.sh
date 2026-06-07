@@ -1,9 +1,10 @@
 #!/bin/bash
 set -e
 
+# Resolve paths from this script's location so the script can be run from any working directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TASKS_DIR="$SCRIPT_DIR/../workspaces/tasks"
+TASKS_DIR="$REPO_ROOT/workspaces/tasks"
 UV_ENV_ARGS=()
 if [ -f "$REPO_ROOT/.env" ]; then
     UV_ENV_ARGS=(--env-file "$REPO_ROOT/.env")

@@ -5,15 +5,12 @@
 #set -e
 #fi
 
+# Resolve paths from this script's location so the script can be run from any working directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-if [ "$(basename "$SCRIPT_DIR")" != "evaluation" ]; then
-    echo "Error: Script must be run from the 'evaluation' directory"
-    echo "Current directory is: $(basename "$SCRIPT_DIR")"
-    exit 1
-fi
+TASKS_DIR="$REPO_ROOT/workspaces/tasks"
 
-TASKS_DIR="$(cd "$SCRIPT_DIR/../workspaces/tasks" && pwd)"
+cd "$SCRIPT_DIR"
 
 # AGENT_LLM_CONFIG is the config name for the agent LLM
 # In config.toml, you should have a section with the name
@@ -118,8 +115,6 @@ for task_dir in "$TASKS_DIR"/*/; do
     # task_image="ghcr.io/sani903/${task_name}-image:${VERSION}"
     # echo "Use released image $task_image..."
     
-    # Run evaluation from the evaluation directory
-    cd "$SCRIPT_DIR"
     uv run "${UV_ENV_ARGS[@]}" python run_eval.py \
         --agent-llm-config "$AGENT_LLM_CONFIG" \
         --env-llm-config "$ENV_LLM_CONFIG" \

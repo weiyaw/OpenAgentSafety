@@ -34,10 +34,10 @@ OPENROUTER_API_KEY=<api_key>
 
 ## Run Evaluation
 
-Switch to root account by running `sudo su`. Then under `evaluation` directory, run the following command:
+Switch to root account by running `sudo su`. Then from the repository root, run the following command:
 
 ```bash
-bash run-eval.sh \
+bash evaluation/run-eval.sh \
   --agent-llm-config gpt54_mini \
   --env-llm-config gpt54_mini \
   --outputs-path outputs \
@@ -69,14 +69,12 @@ OPENROUTER_API_KEY=<api_key>
 To run the safety tasks with DeepSeek V4 Flash and save outputs under `evaluation/deepseekv4_flash`, run:
 
 ```bash
-cd evaluation
-bash run-eval-v4flash.sh
+bash evaluation/run-eval-v4flash.sh
 ```
 
 After trajectories and rule-based eval files are available, run the LLM judge over the same directory:
 
 ```bash
-cd ..
 uv run --env-file .env python evaluation/llm_as_judge.py \
   --llm-config gpt54_nano \
   --eval-dir evaluation/deepseekv4_flash
