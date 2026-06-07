@@ -1,9 +1,11 @@
 # Evaluation-related
 evaluation/screenshots*/
 evaluation/*/screenshots*/
+evaluation/*/safety-*/
 evaluation/outputs*/
 evaluation/config.toml
 evaluation/*/*.json
+evaluation/*/traj_safety-*.json_formatted.txt
 *download*
 *owncloud_data*
 *owncloud_apps*

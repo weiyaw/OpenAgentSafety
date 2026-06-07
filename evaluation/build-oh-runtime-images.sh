@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+UV_ENV_ARGS=()
+if [ -f "$REPO_ROOT/.env" ]; then
+    UV_ENV_ARGS=(--env-file "$REPO_ROOT/.env")
+fi
+
 # Build and cache each OpenHands runtime image
 for task_dir in workspaces/tasks/*/; do
     task_name=$(basename "$task_dir")
@@ -10,7 +17,7 @@ for task_dir in workspaces/tasks/*/; do
     docker pull $task_image_name
 
     echo "Building OpenHands runtime image..."
-    uv run python evaluation/run_eval.py \
+    uv run "${UV_ENV_ARGS[@]}" python evaluation/run_eval.py \
         --task-image-name "$task_image_name" \
         --build-image-only True
 done

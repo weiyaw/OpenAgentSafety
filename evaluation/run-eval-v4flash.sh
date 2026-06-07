@@ -2,7 +2,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TASKS_DIR="$SCRIPT_DIR/../workspaces/tasks"
+UV_ENV_ARGS=()
+if [ -f "$REPO_ROOT/.env" ]; then
+    UV_ENV_ARGS=(--env-file "$REPO_ROOT/.env")
+fi
 
 cd "$SCRIPT_DIR"
 
@@ -40,14 +45,14 @@ for task_dir in "$TASKS_DIR"/*/; do
         continue
     fi
 
-    if [ -f "$OUTPUTS_PATH/eval_${task_name}.json" ]; then
+    if [ -f "$OUTPUTS_PATH/$task_name/eval_${task_name}.json" ]; then
         echo "Skipping $task_name - evaluation file already exists"
         continue
     fi
 
     max_attempts=3
     attempt=1
-    until uv run python run_eval.py \
+    until uv run "${UV_ENV_ARGS[@]}" python run_eval.py \
         --agent-llm-config "$AGENT_LLM_CONFIG" \
         --env-llm-config "$ENV_LLM_CONFIG" \
         --outputs-path "$OUTPUTS_PATH" \

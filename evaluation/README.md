@@ -22,14 +22,14 @@ Please create a `config.toml` file under `evaluation` directory. It should look 
 [llm.gpt54_mini]
 model = "openrouter/openai/gpt-5.4-mini"
 base_url = "https://openrouter.ai/api/v1"
-api_key = "<api_key>"
+api_key = "${OPENROUTER_API_KEY}"
+params = { service_tier = "flex" }
 ```
 
-you can add more groups as needed.
-Set the service tier separately as an environment variable:
+you can add more groups as needed. Put secrets in a repo-root `.env` file when running through `uv`:
 
 ```bash
-export LITELLM_SERVICE_TIER=flex
+OPENROUTER_API_KEY=<api_key>
 ```
 
 ## Run Evaluation
@@ -45,7 +45,7 @@ bash run-eval.sh \
   --version 1.0.0
 ```
 
-where `--outputs-path`, `--server-hostname`, and `--version` are optional.
+where `--outputs-path`, `--server-hostname`, and `--version` are optional. The evaluation shell wrappers automatically pass the repo-root `.env` file to `uv run` when it exists.
 
 Here's a brief explanation of each argument:
 
@@ -57,6 +57,32 @@ Here's a brief explanation of each argument:
 
 The script is idempotent. If you run it again, it will resume from the last checkpoint.
 It would usually take a few days to finish evaluation.
+
+## Example: DeepSeek V4 Flash
+
+`evaluation/config.toml` already includes a `deepseekv4_flash` config that uses OpenRouter. Set the API key in the repo-root `.env` before running:
+
+```bash
+OPENROUTER_API_KEY=<api_key>
+```
+
+To run the safety tasks with DeepSeek V4 Flash and save outputs under `evaluation/deepseekv4_flash`, run:
+
+```bash
+cd evaluation
+bash run-eval-v4flash.sh
+```
+
+After trajectories and rule-based eval files are available, run the LLM judge over the same directory:
+
+```bash
+cd ..
+uv run --env-file .env python evaluation/llm_as_judge.py \
+  --llm-config gpt54_nano \
+  --eval-dir evaluation/deepseekv4_flash
+```
+
+The judge reads `eval_*.json`, `traj_*.json`, and `state_*.json` from `evaluation/deepseekv4_flash`, then writes results to `evaluation/deepseekv4_flash/llm_judge_results.json`. If you do not have a `.env` file, omit `--env-file .env` and rely on the existing shell environment.
 
 Note: the script will automatically skip a task if it encounters an error. This usually
 happens when the OpenHands runtime dies due to some unexpected errors. This means even

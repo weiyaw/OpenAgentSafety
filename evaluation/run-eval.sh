@@ -6,6 +6,7 @@
 #fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ "$(basename "$SCRIPT_DIR")" != "evaluation" ]; then
     echo "Error: Script must be run from the 'evaluation' directory"
     echo "Current directory is: $(basename "$SCRIPT_DIR")"
@@ -82,7 +83,11 @@ echo "Server hostname: $SERVER_HOSTNAME"
 RESTART_EVERY=1
 TASK_COUNT=0
 TMUX_SESSION="uv2"
-TMUX_COMMAND="uv run fastapi run sotopia/api/fastapi_server.py --workers 1 --port 8080"
+UV_ENV_ARGS=()
+if [ -f "$REPO_ROOT/.env" ]; then
+    UV_ENV_ARGS=(--env-file "$REPO_ROOT/.env")
+fi
+TMUX_COMMAND="uv run ${UV_ENV_ARGS[*]} fastapi run sotopia/api/fastapi_server.py --workers 1 --port 8080"
 # Iterate through each directory in tasks
 for task_dir in "$TASKS_DIR"/*/; do
     task_name=$(basename "$task_dir")
@@ -102,7 +107,7 @@ for task_dir in "$TASKS_DIR"/*/; do
     # fi
     # Check if evaluation file exists
     echo $task_name
-    if [ -f "$OUTPUTS_PATH/eval_${task_name}.json" ]; then
+    if [ -f "$OUTPUTS_PATH/$task_name/eval_${task_name}.json" ]; then
         echo "Skipping $task_name - evaluation file already exists"
         continue
     fi
@@ -115,7 +120,7 @@ for task_dir in "$TASKS_DIR"/*/; do
     
     # Run evaluation from the evaluation directory
     cd "$SCRIPT_DIR"
-    uv run python run_eval.py \
+    uv run "${UV_ENV_ARGS[@]}" python run_eval.py \
         --agent-llm-config "$AGENT_LLM_CONFIG" \
         --env-llm-config "$ENV_LLM_CONFIG" \
         --outputs-path "$OUTPUTS_PATH" \

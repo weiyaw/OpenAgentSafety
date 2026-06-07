@@ -34,23 +34,6 @@ from browsing import pre_login
 _ENV_VAR_RE = re.compile(r'\$\{([^}:]+)(?::-[^}]*)?\}')
 
 
-def load_dotenv_if_present(start_dir: str) -> None:
-    """Load simple KEY=VALUE lines from .env without overriding the shell."""
-    dotenv_path = os.path.join(start_dir, '.env')
-    if not os.path.exists(dotenv_path):
-        return
-
-    with open(dotenv_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#') or '=' not in line:
-                continue
-            key, value = line.split('=', 1)
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = value
-
 
 def expand_env_values(value):
     if isinstance(value, str):
@@ -146,14 +129,6 @@ def merge_llm_params(completion_kwargs: dict, params: dict | None) -> None:
         else:
             completion_kwargs.setdefault(key, copy.deepcopy(value))
 
-
-def get_service_tier(params: dict | None) -> str | None:
-    if not params:
-        return None
-    service_tier = params.get('service_tier')
-    if service_tier is None:
-        return None
-    return str(service_tier)
 
 
 class FakeUser:
@@ -362,7 +337,6 @@ def init_task_env(
         LITELLM_API_KEY=env_llm_config.api_key.get_secret_value(),
         LITELLM_BASE_URL=env_llm_config.base_url,
         LITELLM_MODEL=env_llm_config.model,
-        LITELLM_SERVICE_TIER=get_service_tier(env_llm_params),
     )
     command = f"{env_args} bash /utils/init.sh"
     action = CmdRunAction(command=command)
@@ -392,7 +366,6 @@ def run_solver(runtime: Runtime, task_name: str, config: AppConfig, dependencies
     # logger.info(state)
 
     if save_screenshots:
-        screenshots_dir = os.path.join(screenshots_dir, task_name)
         os.makedirs(screenshots_dir, exist_ok=True)
         for image_id, obs in enumerate(state.history):
             if isinstance(obs, BrowserOutputObservation):
@@ -423,7 +396,6 @@ def run_evaluator(
         LITELLM_API_KEY=env_llm_config.api_key.get_secret_value(),
         LITELLM_BASE_URL=env_llm_config.base_url,
         LITELLM_MODEL=env_llm_config.model,
-        LITELLM_SERVICE_TIER=get_service_tier(env_llm_params),
         DECRYPTION_KEY='theagentcompany is all you need',
     )
     command = (
@@ -473,9 +445,6 @@ if __name__ == '__main__':
         help='LLM config for evaluation environment (NPC & llm-based evaluator)',
     )
     args, _ = parser.parse_known_args()
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    load_dotenv_if_present(repo_root)
-
     if not args.task_path or not args.task_path.strip():
         raise ValueError(f'Task path is invalid!')
     task_short_name = os.path.basename(args.task_path)
@@ -500,6 +469,8 @@ if __name__ == '__main__':
 
     outputs_path = os.path.abspath(args.outputs_path)
     os.makedirs(outputs_path, exist_ok=True)
+    task_output_dir = os.path.join(outputs_path, task_short_name)
+    os.makedirs(task_output_dir, exist_ok=True)
 
     config_toml = os.path.join(os.path.dirname(__file__), 'config.toml')
     agent_llm_config = get_llm_config_arg(args.agent_llm_config, toml_file=config_toml)
@@ -541,18 +512,28 @@ if __name__ == '__main__':
     logger.info(f"Service dependencies: {dependencies}")
     
     try:
-        pre_login(runtime, dependencies, save_screenshots=True, screenshots_dir=os.path.join(outputs_path, "screenshots"))
+        pre_login(
+            runtime,
+            dependencies,
+            save_screenshots=True,
+            screenshots_dir=os.path.join(task_output_dir, "pre_login_screenshots"),
+        )
     except Exception as e:
         logger.error(f"Failed to pre-login: {e}")
 
         # before giving up, let's try to init and login again
 
         init_task_env(runtime, args.server_hostname, env_llm_config, env_llm_params, args.task_path)
-        pre_login(runtime, dependencies, save_screenshots=True, screenshots_dir=os.path.join(outputs_path, "screenshots"))
+        pre_login(
+            runtime,
+            dependencies,
+            save_screenshots=True,
+            screenshots_dir=os.path.join(task_output_dir, "pre_login_screenshots"),
+        )
 
     state = run_solver(runtime, task_short_name, config, dependencies,
-                       save_final_state=True, state_dir=outputs_path,
-                       save_screenshots=True, screenshots_dir=os.path.join(outputs_path, "screenshots"))
+                       save_final_state=True, state_dir=task_output_dir,
+                       save_screenshots=True, screenshots_dir=os.path.join(task_output_dir, "screenshots"))
     
     # this path is the absolute path in the runtime container
     trajectory_path = f'/outputs/traj_{task_short_name}.json'
@@ -561,5 +542,5 @@ if __name__ == '__main__':
     run_evaluator(runtime, env_llm_config, env_llm_params, trajectory_path, result_path)
     runtime.close()
     # finally, move trajectory file and evaluation result from mount path on host (temp dir) to outputs path
-    shutil.move(os.path.join(temp_dir, f'traj_{task_short_name}.json'), os.path.join(outputs_path, f'traj_{task_short_name}.json'))
-    shutil.move(os.path.join(temp_dir, f'eval_{task_short_name}.json'), os.path.join(outputs_path, f'eval_{task_short_name}.json'))
+    shutil.move(os.path.join(temp_dir, f'traj_{task_short_name}.json'), os.path.join(task_output_dir, f'traj_{task_short_name}.json'))
+    shutil.move(os.path.join(temp_dir, f'eval_{task_short_name}.json'), os.path.join(task_output_dir, f'eval_{task_short_name}.json'))
