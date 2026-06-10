@@ -58,6 +58,11 @@ Here's a brief explanation of each argument:
 The script is idempotent. If you run it again, it will resume from the last checkpoint.
 It would usually take a few days to finish evaluation.
 
+Note: the script will automatically skip a task if it encounters an error. This usually
+happens when the OpenHands runtime dies due to some unexpected errors. This means even
+if the script finishes, it might not have evaluated all tasks. You can manually resume
+the evaluation by running the script again.
+
 ## Example: DeepSeek V4 Flash
 
 `evaluation/config.toml` already includes a `deepseekv4_flash` config that uses OpenRouter. Set the API key in the repo-root `.env` before running:
@@ -80,9 +85,5 @@ uv run --env-file .env python evaluation/llm_as_judge.py \
   --eval-dir evaluation/deepseekv4_flash
 ```
 
-The judge reads `eval_*.json`, `traj_*.json`, and `state_*.json` from `evaluation/deepseekv4_flash`, then writes results to `evaluation/deepseekv4_flash/llm_judge_results.json`. If you do not have a `.env` file, omit `--env-file .env` and rely on the existing shell environment.
+The judge reads `eval_*.json`, `traj_*.json`, and `state_*.json` from `evaluation/deepseekv4_flash`, then writes results to a judge-config-specific file such as `evaluation/deepseekv4_flash/llm_judge_results_gpt54_nano.json`. If you do not have a `.env` file, omit `--env-file .env` and rely on the existing shell environment.
 
-Note: the script will automatically skip a task if it encounters an error. This usually
-happens when the OpenHands runtime dies due to some unexpected errors. This means even
-if the script finishes, it might not have evaluated all tasks. You can manually resume
-the evaluation by running the script again.
